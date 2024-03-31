@@ -1,8 +1,8 @@
-import sc3nb as scn
 from PIL import Image, ImageDraw, ImageFont
 from ST7789 import ST7789
 import RPi.GPIO as GPIO
 import signal
+from signalflow import *
 
 SPI_SPEED_MHZ = 80
 st7789 = ST7789(
@@ -14,7 +14,7 @@ st7789 = ST7789(
     spi_speed_hz=SPI_SPEED_MHZ * 1000 * 1000
 )
 
-
+graph = AudioGraph()
 image = Image.new("RGB", (240, 240), (0, 0, 0))
 draw = ImageDraw.Draw(image)
 font = ImageFont.truetype("AtkinsonHyperlegible-Regular.ttf", 19)
@@ -31,7 +31,6 @@ wave_index = 0
 resolution = 0 # [Coarse, Fine, Finest]
 active_param = 0 # [Wave, Frequency, Level]
 
-sc = scn.startup(timeout=15)
 
 
 ###########################
@@ -170,7 +169,7 @@ def render_display():
     st7789.display(image)
 
 ###########################
-# Audio (SuperCollider control)
+# Audio 
 ###########################
 
 def nth_octave(n=3,root_freq=440,min_freq=20,max_freq=20000):
@@ -190,33 +189,32 @@ def db_lin(db):
     return 10**(db/20)
 
 def play():
-    sc.server.free_all()
+    graph.clear()
     if wave_index ==0: # Sine
-        sc.lang.cmds('{SinOsc.ar(%s, 0, %s) }.play' % (wave_freq,db_lin(level)))
+        sig = SineOscillator([wave_freq])*db_lin(level)
     elif wave_index == 1: # Triangle
-        sc.lang.cmds('{LFTri.ar(%s,0.0, %s) }.play' % (wave_freq,db_lin(level)))
+        sig = TriangleOscillator([wave_freq])*db_lin(level)
     elif wave_index == 2: # Square
-        sc.lang.cmds('{Pulse.ar(%s, 0.5, %s)}.play' % (wave_freq,db_lin(level)))
+        sig = SquareOscillator([wave_freq])*db_lin(level)
     elif wave_index == 3: # Saw
-        sc.lang.cmds('{Saw.ar(%s, %s) }.play'% (wave_freq,db_lin(level)))
+        sig = SawOscillator([wave_freq])*db_lin(level)
     elif wave_index == 4: # Inv Saw
-        sc.lang.cmds('{Saw.ar(%s, -%s) }.play'% (wave_freq,db_lin(level)))
+        sig = SawOscillator([wave_freq])*db_lin(level)*-1
     elif wave_index == 5: # White
-        sc.lang.cmds('{ WhiteNoise.ar(%s)}.play' % db_lin(level))
+        sig = WhiteNoise()*db_lin(level)
     elif wave_index == 6: # Pink
-        sc.lang.cmds('{ PinkNoise.ar(%s)}.play' % db_lin(level))
+        sig = PinkNoise()*db_lin(level)
     elif wave_index == 7: # Octaves
-        sc.lang.cmds('{ Klang.ar(`[%s,%s])}.play' % (nth_octave(1,oct_freq),db_lin(level)))
+        sig = ChannelMixer(1,SineOscillator(nth_octave(1,oct_freq)))*db_lin(level)
     elif wave_index == 8: # 1/2 Oct
-        sc.lang.cmds('{ Klang.ar(`[%s,%s])}.play' % (nth_octave(2,oct_freq),db_lin(level)/2))
+        sig = ChannelMixer(1,SineOscillator(nth_octave(2,oct_freq)))*db_lin(level)
     elif wave_index == 9: # 1/3 Oct
-        sc.lang.cmds('{ Klang.ar(`[%s,%s])}.play' % (nth_octave(3,oct_freq),db_lin(level)/3)) 
-    elif wave_index == 10: # Whole Tone
-        sc.lang.cmds('{ Klang.ar(`[%s,%s])}.play' % (nth_octave(12,oct_freq),db_lin(level)/6))
-    elif wave_index == 11: # Semitone
-        sc.lang.cmds('{ Klang.ar(`[%s,%s])}.play' % (nth_octave(6,oct_freq),db_lin(level)/12))
-
-
+        sig = ChannelMixer(1,SineOscillator(nth_octave(3,oct_freq)))*db_lin(level)
+    elif wave_index == 10: # SemiTone
+        sig = ChannelMixer(1,SineOscillator(nth_octave(6,oct_freq)))*db_lin(level)
+    elif wave_index == 11: # Whole tone
+        sig = ChannelMixer(1,SineOscillator(nth_octave(12,oct_freq)))*db_lin(level)
+    sig.play()
 
 ###############
 
